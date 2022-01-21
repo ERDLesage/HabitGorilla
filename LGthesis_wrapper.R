@@ -51,12 +51,19 @@ for (i in 1:nrow(blocks)){
 rm(D_)
 toc()
 
-# clean: exclude RTs<150ms ####
+# QA: exclude RTs<150ms ####
+D$RT <- D$ReactionTime
 D$OptimalChoice[D$ReactionTime<150] <- NA
 D$Response[D$ReactionTime<150] <- NA
 D$ResponseID[D$ReactionTime<150] <- NA
 D$Correct[D$ReactionTime<150] <- NA
-D$Reactiontime[D$ReactionTime<150] <- NA
+D$RT[D$ReactionTime<150] <- NA
+D <- rename(D, RT_unfiltered = ReactionTime) # keep the old
 
-# select: "too-early" responses; prop per block/person ####
+# QA: too-fast & too bad responses; prop per block/person ####
+QA <- D %>% group_by(Subject, Day, Block) %>% summarise(fastRT = mean(is.na(RT)), performance=mean(OptimalChoice, na.rm=TRUE))
+
+plot((1-QA$performance))
+plot(QA$fastRT)
+plot(QA$performance, QA$fastRT)
 
