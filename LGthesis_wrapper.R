@@ -1,10 +1,12 @@
 # wrapper for Lisa Gistelinck's data
 
+rm(list = ls()) # clear wm 
 
 library(pracma)   #for tic, toc
 library(Rmisc) # for summarySE
 library(tidyverse)
-source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/ERDLThemesNSchemes.R")
+source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageThemesNSchemes.R")
+source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageAnalysisUtils.R")
 
 # load in data ####
 setwd("C:/Users/elise.000/Documents/AAA_projects/Lisa_data/")
@@ -14,7 +16,8 @@ D_ <- readxl::read_xlsx('Gorilla_exp_V23_2.2_Lisa.xlsx')
 # puzzle with the data to figure out what the optimal choice is
 # and what the rewarded choice is.
 D_ <- dplyr::rename(D_, Block = Block_Volgorde)
-D_ %>% select(-Incorrect, -Gerandomiseerde_Block_Vogorde, -Optellende_Block_Volgorde)
+#D_ <- dplyr::rename(D_, Block = Optellende_Block_Volgorde)
+D_<- D_ %>% select(-Incorrect, -Gerandomiseerde_Block_Vogorde, -Optellende_Block_Volgorde)
 blocks <- D_ %>% select(Subject, Day, Block, StabilityContext) %>% unique()
 
 
@@ -68,18 +71,33 @@ for (i in 1:nrow(blocks)){
 rm(D_)
 toc()
 
-# # switch history per block and person ####
-# # switch history will index for each block, how long it was been since the contingency flipped
+# QA: clean up weird blocks ####
+# all the exact doubles can go
+pre <- nrow(D)
+D <- unique(D)
+post <- nrow(D)
+disp(sprintf("Got rid of exact replicas (doubles): %d trials, %0.2f pct", pre-post, ((pre-post)/pre)*100))
+# the blocks with very few trials I think I can safely exclude
+qa1 <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Block","StabilityContext"))
+DT <- Sage
+targets <- qa2 %>% mutate(remove=if_else(N<10, 1, 0)) %>% select(Subject, Day, Block, StabilityContext, remove) #%>% filter(remove==1) %>% unique()
+D <- D %>% inner_join(list, by=c("Subject", "Day", "Block","StabilityContext")) %>% filter(remove==0)
+disp(sprintf("Removed %d blocks with fewer than 10 trials", nrow(unique(filter(list, remove==1)))))
+
+# switch history per block and person ####
+# switch history will index for each block, how long it was been since the contingency flipped
 OptiResp <- D %>% select(Subject, Day, StabilityContext, Block, AnswerID, RewardedOnThisTrial) %>% unique()
 OptiResp$Optimal <- ifelse(OptiResp$RewardedOnThisTrial>20, 1,0)
 
 qa1 <- summarySE(OptiResp, measurevar = "Optimal", groupvars = c("Subject", "Day", "Block"))
 plot(qa1$N)
+
+qa3 <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Optellende_Block_Volgorde","StabilityContext"))
+
+qa1Anomalies <- filter(qa1, N>5)
 # how many trials in a block
-qa2 <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Block"))
-plot(qa2$N)
+qa2toolittle <- filter(qa2, N<75)
 plot(qa1$N, qa2$N)
-# the ones with very few trials I think I can safely exclude
 
 # separate the conditions so that we can compare like with like
 ORStable <- filter(OptiResp, StabilityContext=="StabielC")
@@ -118,7 +136,8 @@ for (i in 1:nrow(ORStableWide)) {
 #rm(OptiResp, ORStable, ORVolatile, ORStableWide, ORVolatileWide)
 # how many overtrained blocks
 
-# QA: exclude RTs<150ms ####
+# QA: exclude RTs<150ms #### MAKE THIS A FUNCTION LATER
+SageExclude(D, "ReactionTime>150", new="RT", make.na = c("OptimalChoice", "Response", "ResponseID",  "Correct"), remove=FALSE)
 D$RT <- D$ReactionTime
 D$OptimalChoice[D$ReactionTime<150] <- NA
 D$Response[D$ReactionTime<150] <- NA
