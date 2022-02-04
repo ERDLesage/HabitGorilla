@@ -9,14 +9,13 @@ source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGor
 source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageAnalysisUtils.R")
 
 # load in data ####
-setwd("C:/Users/elise.000/Documents/AAA_projects/Lisa_data/")
-D_ <- readxl::read_xlsx('Gorilla_exp_V23_2.2_Lisa.xlsx')
+D_ <- readxl::read_xlsx('C:/Users/elise.000/Documents/AAA_projects/Lisa_data/Gorilla_exp_V23_2.2_Lisa.xlsx')
 
 # tidy the dataset ####
 # puzzle with the data to figure out what the optimal choice is
 # and what the rewarded choice is.
 D_ <- dplyr::rename(D_, Block = Block_Volgorde)
-#D_ <- dplyr::rename(D_, Block = Optellende_Block_Volgorde)
+D_ <- dplyr::rename(D_, RT = ReactionTime)
 D_<- D_ %>% select(-Incorrect, -Gerandomiseerde_Block_Vogorde, -Optellende_Block_Volgorde)
 blocks <- D_ %>% select(Subject, Day, Block, StabilityContext) %>% unique()
 
@@ -76,28 +75,41 @@ toc()
 pre <- nrow(D)
 D <- unique(D)
 post <- nrow(D)
-disp(sprintf("Got rid of exact replicas (doubles): %d trials, %0.2f pct", pre-post, ((pre-post)/pre)*100))
-# the blocks with very few trials I think I can safely exclude
+disp(sprintf("Got rid of exact replicas (doubles): %d trials, %0.2f pct of data.", pre-post, ((pre-post)/pre)*100))
+rm(pre, post)
+# get rid of very fast responses
+D <- SageExcludeSimple(D, D$RT<150)
+# the blocks with very few trials (less than 10) I think I can safely exclude
 qa1 <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Block","StabilityContext"))
-DT <- Sage
-targets <- qa2 %>% mutate(remove=if_else(N<10, 1, 0)) %>% select(Subject, Day, Block, StabilityContext, remove) #%>% filter(remove==1) %>% unique()
-D <- D %>% inner_join(list, by=c("Subject", "Day", "Block","StabilityContext")) %>% filter(remove==0)
-disp(sprintf("Removed %d blocks with fewer than 10 trials", nrow(unique(filter(list, remove==1)))))
+targets <- qa1 %>% mutate(exclude=if_else(N<10, 1, 0)) 
+D<- SageExcludeHO(D, targets, groupvars= c("Subject", "Day", "Block","StabilityContext"), remove_data = TRUE)
+
+################# pfff still need to work on this I suppose...
+qa1 <- summarySE(OptiResp, measurevar = "Optimal", groupvars = c("Subject", "Day", "Block","StabilityContext"))
+plot(qa1$N)
+qa1Anomalies <- filter(qa1, N!=4) # do this with the stability as grouper and without...
+
+qa3 <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Block","StabilityContext"))
+
+qa3Anomalies <- filter(qa3, N>5)
+# how many trials in a block
+qa2toolittle <- filter(qa2, N<75)
+plot(qa1$N, qa3$N)
+
+# QA: too-fast & too bad responses; prop per block/person ####
+# dp: how many (usable) datapoints per block
+QA <- D %>% group_by(Subject, Day, Block, StabilityContext) %>% summarise(fastRT = mean(is.na(RT)), performance=mean(OptimalChoice, na.rm=TRUE), dp=sum(!is.na(OptimalChoice)))
+QAOverBlock <- D %>% group_by(Subject, Day, StabilityContext) %>% summarise(fastRT = mean(is.na(RT)), performance=mean(OptimalChoice, na.rm=TRUE), dp=sum(!is.na(OptimalChoice)))
+
+plot((1-QA$performance))
+plot(QA$fastRT)
+plot(QA$fastRT, QA$performance)
+plot(QA$dp)
 
 # switch history per block and person ####
 # switch history will index for each block, how long it was been since the contingency flipped
 OptiResp <- D %>% select(Subject, Day, StabilityContext, Block, AnswerID, RewardedOnThisTrial) %>% unique()
 OptiResp$Optimal <- ifelse(OptiResp$RewardedOnThisTrial>20, 1,0)
-
-qa1 <- summarySE(OptiResp, measurevar = "Optimal", groupvars = c("Subject", "Day", "Block"))
-plot(qa1$N)
-
-qa3 <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Optellende_Block_Volgorde","StabilityContext"))
-
-qa1Anomalies <- filter(qa1, N>5)
-# how many trials in a block
-qa2toolittle <- filter(qa2, N<75)
-plot(qa1$N, qa2$N)
 
 # separate the conditions so that we can compare like with like
 ORStable <- filter(OptiResp, StabilityContext=="StabielC")
@@ -136,38 +148,12 @@ for (i in 1:nrow(ORStableWide)) {
 #rm(OptiResp, ORStable, ORVolatile, ORStableWide, ORVolatileWide)
 # how many overtrained blocks
 
-# QA: exclude RTs<150ms #### MAKE THIS A FUNCTION LATER
-SageExclude(D, "ReactionTime>150", new="RT", make.na = c("OptimalChoice", "Response", "ResponseID",  "Correct"), remove=FALSE)
-D$RT <- D$ReactionTime
-D$OptimalChoice[D$ReactionTime<150] <- NA
-D$Response[D$ReactionTime<150] <- NA
-D$ResponseID[D$ReactionTime<150] <- NA
-D$Correct[D$ReactionTime<150] <- NA
-D$RT[D$ReactionTime<150] <- NA
-D <- dplyr::rename(D, RT_unfiltered = ReactionTime) # keep the old
-
-# QA: too-fast & too bad responses; prop per block/person ####
-# dp: how many (usable) datapoints per block
-QA <- D %>% group_by(Subject, Day, Block, StabilityContext) %>% summarise(fastRT = mean(is.na(RT)), performance=mean(OptimalChoice, na.rm=TRUE), dp=sum(!is.na(OptimalChoice)))
-QAOverBlock <- D %>% group_by(Subject, Day, StabilityContext) %>% summarise(fastRT = mean(is.na(RT)), performance=mean(OptimalChoice, na.rm=TRUE), dp=sum(!is.na(OptimalChoice)))
-
-plot((1-QA$performance))
-plot(QA$fastRT)
-plot(QA$fastRT, QA$performance)
-plot(QA$dp)
-
 # look at patterns re: subjects, time (condition)
-QA1 <- ggplot(filter(QA, ChancePerformers==0), aes(x=dp, y=performance)) + scale_y_continuous(limits = c(0, 1))+
+QA1 <- ggplot(QA, aes(x=dp, y=performance)) + scale_y_continuous(limits = c(0, 1))+
   geom_point(aes(shape = StabilityContext, colour=as.factor(Subject), group=Day), stroke=1, size = 2, alpha=.5) +
   facet_grid(StabilityContext~Day) +
   theme_ERDL_simple()+ theme(legend.position = "none", legend.title = element_blank()) 
 QA1
-
-QA2 <- ggplot(filter(QAOverBlock, ChancePerformers==0), aes(x=fastRT, y=performance)) + scale_y_continuous(limits = c(0, 1))+
-  geom_point(aes(shape = StabilityContext, colour=as.factor(Subject), group=Day), stroke=1, size = 2, alpha=.8) +
-  facet_grid(StabilityContext~Day) +
-  theme_ERDL_simple()+ theme(legend.position = "none", legend.title = element_blank()) 
-QA2
 
 # Identify blocks with very very low performance (<10%) ####
 hist(QA$performance)
@@ -191,8 +177,8 @@ QAOverBlock$ChanceD3 <- ifelse(is.element(QAOverBlock$Subject, as.vector(as.matr
 D$BlockStr <- sprintf("%02d", D$Block)
 D<- D %>% unite(DayBlock, Day, BlockStr, sep=".", remove = FALSE)
 D$Subject <- as.factor(D$Subject)
-AccDayBlock <- filter(D, ChancePerformers==0) %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
-RTDayBlock <- filter(D, OptimalChoice==1, ChancePerformers==0) %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "ReactionTime", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
+AccDayBlock <- D %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
+RTDayBlock <- filter(D, OptimalChoice==1) %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "RT", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
 #acc_overtime <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
 
 AccuracyLines <- ggplot(AccDayBlock, aes(x=DayBlock, y=OptimalChoice, Group=Subject)) + #scale_y_continuous(limits = c(0.05, 0.2))+
