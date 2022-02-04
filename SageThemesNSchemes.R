@@ -2,7 +2,7 @@
 # elise.r.d.lesage@gmail.com
 # Customised ggplot2 themes, color schemes, etc
 
-theme_ERDL_simple <- function() {
+theme_sage_simple <- function() {
   theme(
     #base_size = 20,
     # add border 1)
@@ -33,7 +33,7 @@ theme_ERDL_simple <- function() {
   )
 }
 
-theme_ERDL_simple_nogrid <- function() {
+theme_sage_simple_nogrid <- function() {
   theme(
     #base_size = 20,
     # add border 1)
