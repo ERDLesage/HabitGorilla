@@ -49,7 +49,7 @@ SageExcludeSimple <- function(data, crit_vector, remove_data = TRUE, var_name = 
 # CAUTION
 # this function relies on the last column of the criterion dataframe being the criterion
 
-SageExcludeHO <- function(data, crit_frame, groupvars, remove_data = TRUE, var_name = Exclusion){
+SageExcludeHO <- function(data, crit_frame, groupvars, remove_data = TRUE, var_name = "Exclusion"){
   # keep only the relevant columns
   crit_frame <- cbind(crit_frame[groupvars], crit_col=pull(crit_frame, -1))
   # throw an error if the provided column name already exists
