@@ -52,6 +52,10 @@ SageExcludeSimple <- function(data, crit_vector, remove_data = TRUE, var_name = 
 SageExcludeHO <- function(data, crit_frame, groupvars, remove_data = TRUE, var_name = Exclusion){
   # keep only the relevant columns
   crit_frame <- cbind(crit_frame[groupvars], crit_col=pull(crit_frame, -1))
+  # throw an error if the provided column name already exists
+  if (var_name %in% colnames(data)) {
+    stop("The provided column name already exists.\nPerhaps this command was already run?\nIf not, try again with a unique column name for the targeted data.")
+  }
   # throw an error if the last column wasn't binary
   if (min(crit_frame$crit_col, na.rm=TRUE)==0 & max(crit_frame$crit_col, na.rm=TRUE)==0){
     disp("No data seem selected for exclusion.\n")
@@ -67,9 +71,9 @@ SageExcludeHO <- function(data, crit_frame, groupvars, remove_data = TRUE, var_n
   if (remove_data){
     disp(sprintf("Identified %d trials for exclusion, %0.2f percent of data.\n", sum(data$crit_col), (sum(data$crit_col)/nrow(data))*100))
     data <- data %>% filter(crit_col==0) %>% select(-crit_col)
-  } else {
-    disp(sprintf("Identified %d trials that match the exclusion criterion.\nThese are NOT excluded; the variable %s was created.\nFilter the data as needed using this variable.\n", data$crit_col, var_name))
-    data <- colnames(data)[colnames(data) == "crit_col"] <- var_name
+  } else if (!remove_data){
+    disp(sprintf("Identified %d trials that match the exclusion criterion.\nYou opted NOT to delete these trials; instead the variable %s was created.\nFilter the data as needed using this variable.\n\n", sum(data$crit_col), var_name))
+    colnames(data)[colnames(data) == "crit_col"] <- var_name
   }
   return(data)
 }
