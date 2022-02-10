@@ -78,3 +78,37 @@ SageExcludeHO <- function(data, crit_frame, groupvars, remove_data = TRUE, var_n
   return(data)
 }
 
+# this one is unlikely very useful for the future, but...
+
+ContingencyLookUpTable <- function(data){
+  
+  return(table)
+}
+
+# catch multiple of the same responses
+# if the response is the same for over a given number of trials
+# if the response systematically (e.g. L-R-L-R ...)
+# if there are many trials missing in a row
+
+SageSlackerCatch <- function(dat, respcol, groupvars, cutoff = 20){
+  # throw an error if the respcol is not a column in the dataframe
+  
+  chunks <- dat %>% select(all_of(groupvars)) %>% unique()
+  chunks$alt <- NA
+  chunks$same <- NA
+  chuncks$none <- NA
+  chunks$sus <- NA
+  for (b in 1:5) { #nrow(blocks)){
+    bd <- semi_join(dat, chunks[b,])
+    nonlag <- bd %>% select(.data[[respcol]])
+    lag <- bd %>% select(.data[[respcol]]) %>% lag()
+    diff <- as.numeric(nonlag==lag)
+    # sum of alternating (a batch of zeros)
+    zeros <- vector("integer", cutoff)
+    bd$alt <- ifelse((zeros %in% diff), 1, 0)
+    # sum of same (a batch of ones)
+    ones <- zeros+1
+  }
+  #return(list(dat, chunks))
+  return(chunks)
+}
