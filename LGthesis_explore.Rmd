@@ -2,29 +2,79 @@
 title: "Explore_LG_thesis_data"
 author: "ERDLesage"
 date: "07/02/2022"
-output: html_document
+output: 
+  html_document: 
+    highlight: textmate
+    theme: spacelab
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(pracma)   #for tic, toc
+library(Rmisc) # for summarySE
+library(tidyverse)
+library(gtsummary)
+source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageThemesNSchemes.R")
+
+D_ <- read.table("C:/Users/elise.000/Documents/AAA_projects/Lisa_data/LG_overtraining.txt", header = TRUE, sep = "\t")
+```
+# Lisa's overtraining data
+
+## A word of intro
+A lot of things went wrong with this dataset. Notably, the counterbalancing. As a result, our hypotheses cannot readily be tested, but perhaps a fair amount of "pilot"-ish hints can be derived from the data.
+
+The data has been preprocessed through the *LGthesis_QA_and_preprocessing.R* script. A couple of filters were created. These need to now be used to continue with the filtered data.
+
+## What proportion of the data is problematic + exclusions
+```{r filter the data & summarise, echo=FALSE}
+D_ %>% select(Day, fubar, Slackerblock, BadPerformer) %>% tbl_summary(by=Day) %>% add_n() %>% # add column with total number of non-missing observations
+  bold_labels() 
+# filtering out the bad blocks (fubar) and the blocks with "slackerblocks"
+D <- D_ %>% filter(fubar==0, Slackerblock==0)
+# Identifying and excluding bad performers
+AccuracyRaw <- D %>% group_by(Subject, Day, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "StabilityContext"), na.rm=TRUE)
+# histogram per Day (introduce a cutoff at .75)
+PerfHist <- ggplot(AccuracyRaw, aes(x=OptimalChoice)) + 
+  geom_histogram(aes(fill=as.factor(Day)), binwidth = 0.05) +
+  geom_vline(xintercept = .75)+
+  facet_grid(.~Day) +
+  theme_sage_simple()
+PerfHist
+AccuracyRaw <- AccuracyRaw %>% mutate(Under75 = ifelse(Day>1&OptimalChoice<.75, 1, 0))
+
+
+
+```
+## Data overview
+```{r show summaries, echo=FALSE}
+D %>% select(Day, OptimalChoice, RT) %>% tbl_summary(by=Day, statistic = list(all_continuous() ~ "{mean} ({sd})", all_categorical() ~ "{p}% ({n} / {N})")) %>% add_overall() %>% # add an overall column
+  add_n() %>% # add column with total number of non-missing observations
+  add_p() %>% # test for a difference between groups
+  bold_labels() 
+D %>% select(Subject, Day) %>% tbl_summary(by=Day) %>% 
+  add_n() %>% # add column with total number of non-missing observations
+  bold_labels() 
 ```
 
-## R Markdown
+## How do people learn over time? 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r spaghetti learning, echo=FALSE}
+AccGrp <- D %>% group_by(Day, Block, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Block", "StabilityContext"), na.rm=TRUE)
+AccInd <- D %>% group_by(Subject, Day, Block,StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "Block", "StabilityContext"), na.rm=TRUE)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+RTGrp <- D %>% group_by(Block, StabilityContext) %>% summarySE(measurevar = "RT", groupvars = c("Day", "StabilityContext"), na.rm=TRUE)
+RTInd <- D %>% group_by(Subject, Block,StabilityContext) %>% summarySE(measurevar = "RT", groupvars = c("Subject", "Day", "StabilityContext"), na.rm=TRUE) 
 
-```{r cars}
-summary(cars)
+AccSpaghetti <- ggplot(AccInd, aes(x=Block, y=OptimalChoice, Group=Subject)) +   geom_line(aes(group=Subject, colour=Subject), size = 0.1, alpha=.5) +
+  facet_grid(StabilityContext~.)+
+  xlab("Overtraining") + ylab("Accuracy")+ggtitle("Accuracy over time")+
+  theme_sage_simple()
+AccSpaghetti
+
 ```
+## Do ppl deal differently with the "exception" over time, and/or depending on context?
 
-## Including Plots
+## Micro-habits? The effect of the switch history
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Now a little more difficult
