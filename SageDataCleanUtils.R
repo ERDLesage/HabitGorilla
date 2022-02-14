@@ -1,10 +1,6 @@
 # 2022 by The Sage (elise.r.d.lesage@gmail.com)
-# Various analysis util functions
+# Various data cleaning util functions
 # originally built to work with Gorilla.sc output
-
-# function to check for missed responses ####
-# input: dataframe, condition that (e.g. RT==0, Response ==NA, ...), other variables that should become NA, name for missed variable (default=Missed)
-# output: amended dataframe
 
 # simple exclude wrapper (simple: using a first-order criterion)
 # INPUT:
@@ -88,26 +84,34 @@ ContingencyLookUpTable <- function(data){
 # catch multiple of the same responses
 # if the response is the same for over a given number of trials
 # if the response systematically (e.g. L-R-L-R ...)
-# if there are many trials missing in a row
+# if there are many trials missing in a row (caution: relies on missing values being "NA" in the response column)
 
 SageSlackerCatch <- function(dat, respcol, groupvars, cutoff = 20){
   # throw an error if the respcol is not a column in the dataframe
-  
   chunks <- dat %>% select(all_of(groupvars)) %>% unique()
   chunks$alt <- NA
   chunks$same <- NA
-  chuncks$none <- NA
+  chunks$none <- NA
   chunks$sus <- NA
-  for (b in 1:5) { #nrow(blocks)){
-    bd <- semi_join(dat, chunks[b,])
+  nas <- paste(replicate(cutoff, "NA"), collapse="")
+  zeros <- paste(replicate(cutoff, "0"), collapse="")
+  ones <- paste(replicate(cutoff, "1"), collapse="")
+  for (b in 1:nrow(chunks)){
+    bd <- semi_join(dat, chunks[b,], by = c("Day", "Subject", "Block"))
     nonlag <- bd %>% select(.data[[respcol]])
     lag <- bd %>% select(.data[[respcol]]) %>% lag()
-    diff <- as.numeric(nonlag==lag)
+    diff <- as.numeric(nonlag==lag) 
+    diffstr <- paste(as.character(diff), collapse = "")
     # sum of alternating (a batch of zeros)
-    zeros <- vector("integer", cutoff)
-    bd$alt <- ifelse((zeros %in% diff), 1, 0)
+    chunks$alt[b] <- ifelse(grepl(zeros, diffstr), 1, 0)
     # sum of same (a batch of ones)
-    ones <- zeros+1
+    chunks$same[b] <- ifelse(grepl(ones, diffstr), 1, 0)
+    # missed responses
+    chunks$none[b] <- ifelse(grepl(nas, diffstr), 1, 0)
+    # if either of the three happened, we have an issue with the block
+    chunks$sus[b] <- ifelse(sum(chunks$same[b],chunks$none[b], chunks$alt[b])>0, 1, 0)
+    disp(sprintf("Checked block %d of %d. Sus? %d", b, nrow(chunks), chunks$sus[b]))
+    rm(bd, nonlag, lag, diff, diffstr)
   }
   #return(list(dat, chunks))
   return(chunks)
