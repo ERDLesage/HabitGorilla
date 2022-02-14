@@ -9,16 +9,39 @@ source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGor
 source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageAnalysisUtils.R")
 
 # load in data ####
-D_ <- readxl::read_xlsx('C:/Users/elise.000/Documents/AAA_projects/Lisa_data/Gorilla_exp_V23_2.2_Lisa.xlsx')
+#D_ <- readxl::read_xlsx('C:/Users/elise.000/Documents/AAA_projects/Lisa_data/Gorilla_exp_V23_2.2_Lisa.xlsx')
+D_ <- readxl::read_xlsx('C:/Users/elise.000/Documents/AAA_projects/Lisa_data/LG_edit2.xlsx')
 
-# tidy the dataset ####
+# calculate Block from scratch ####
+D_ <- select(D_, -Block_Volgorde, -Optellende_Block_Volgorde)
+D_ <- dplyr::rename(D_, RandBlock=Gerandomiseerde_Block_Vogorde)
+D_ <- dplyr::rename(D_, RT=ReactionTime)
+
+A <- tibble()
+for (n in 1:length(unique(D_$Subject))){
+  disp(sprintf("Starting subject %d", unique(D_$Subject)[n]))
+  a <- filter(D_, Subject == unique(D_$Subject)[n])
+  # make a little "lookup table"
+  l <- data.frame(unique(cbind(a$Day, a$RandBlock, a$StabilityContext)))
+  l$Block <- 1:nrow(l)
+  colnames(l) <- c("Day", "RandBlock","StabilityContext", "Block")
+  l$Day <- as.numeric(l$Day)
+  l$RandBlock <- as.numeric(l$RandBlock)
+  a <- inner_join(a, l, by = c("Day", "RandBlock","StabilityContext"))
+  A <- rbind(A, a)
+  rm(a, l)
+}
+#rm(D_)
+# sanity check: how many trials per block, per day, per person
+s <- A %>% group_by(Subject, Day, Block, StabilityContext) %>% summarise(num=n())
+plot(s$num)
+s$weirdblocks <- ifelse((s$num<85|s$num>90), 1, 0)
+A <- SageExcludeHO(A, s, groupvars=c("Subject", "Day", "Block", "StabilityContext"), remove_data = FALSE, var_name = "fubar")
+
+# Go through blocks ####
 # puzzle with the data to figure out what the optimal choice is
 # and what the rewarded choice is.
-D_ <- dplyr::rename(D_, Block = Block_Volgorde)
-D_ <- dplyr::rename(D_, RT = ReactionTime)
-#D_<- D_ %>% select(-Incorrect, -Gerandomiseerde_Block_Vogorde, -Optellende_Block_Volgorde)
-blocks <- D_ %>% select(Subject, Day, Block, StabilityContext) %>% unique()
-
+blocks <- A %>% select(Subject, Day, Block, StabilityContext) %>% unique()
 
 # run through blocks to add more useful variables
 D <-tibble()
@@ -26,16 +49,16 @@ tic()
 nBlockRedFlags <- 0
 #for (s in 1:length(unique(D_$Subject)))
 for (i in 1:nrow(blocks)){
-  b <- D_ %>% filter((Subject == blocks[[i,1]] & Day == blocks[[i,2]] & Block == blocks[[i, 3]]))
+  b <- A %>% filter((Subject == blocks[[i,1]] & Day == blocks[[i,2]] & Block == blocks[[i, 3]]))
   b$ResponseID <- NA
   b$AnswerID <- NA
   b$OptimalChoice <- NA
   b$BlockRedFlag <- NA
-  b$BlockRedFlag <-ifelse(length(unique(b$Gerandomiseerde_Block_Vogorde))>1, length(unique(b$Gerandomiseerde_Block_Vogorde)), 0)
-  if (length(unique(b$Gerandomiseerde_Block_Vogorde))>1) {
-  nBlockRedFlags <- nBlockRedFlags+1
-  disp(sprintf("Already %d Blocks red flagged.", nBlockRedFlags))
-  }
+  # b$BlockRedFlag <-ifelse(length(unique(b$RandBlock))>1, length(unique(b$RandBlock)), 0)
+  # if (length(unique(b$RandBlock))>1) {
+  # nBlockRedFlags <- nBlockRedFlags+1
+  # disp(sprintf("Already %d Blocks red flagged.", nBlockRedFlags))
+  # }
   b$ResponseID[(b$Response == "Left shovel")& !is.na(b$Response)] <- b$LeftShovel[(b$Response == "Left shovel")& !is.na(b$Response)]
   b$ResponseID[(b$Response == "Left dynamite")& !is.na(b$Response)] <- b$LeftDynamite[(b$Response == "Left dynamite")& !is.na(b$Response)]
   b$ResponseID[(b$Response == "Right shovel")& !is.na(b$Response)] <- b$RightShovel[(b$Response == "Right shovel")& !is.na(b$Response)]
@@ -85,9 +108,13 @@ qa1 <- summarySE(D, measurevar = "OptimalChoice", groupvars = c("Subject", "Day"
 targets <- qa1 %>% mutate(exclude=if_else(N<10, 1, 0)) 
 D<- SageExcludeHO(D, targets, groupvars= c("Subject", "Day", "Block","StabilityContext"), remove_data = TRUE)
 rm(qa1, targets)
-################# Further filtering ...
-OptiResp <- D %>% select(Subject, Day, StabilityContext, Block, AnswerID, RewardedOnThisTrial) %>% unique()
+
+# make the lookup table for the randblocks
+OptiResp <- D %>% select(Subject, Day, StabilityContext, Block, RandBlock, AnswerID, RewardedOnThisTrial) %>% unique()
 OptiResp$Optimal <- ifelse(OptiResp$RewardedOnThisTrial>20, 1,0)
+
+#detect suspicious behavior
+g<- SageSlackerCatch(D, Response, groupvar = c("Subject", "Day", "Block"))
 
 qa1 <- summarySE(OptiResp, measurevar = "Optimal", groupvars = c("Subject", "Day", "Block","StabilityContext"))
 plot(qa1$N)
