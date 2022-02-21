@@ -5,6 +5,7 @@ rm(list = ls()) # clear wm
 library(pracma)   #for tic, toc
 library(Rmisc) # for summarySE
 library(tidyverse)
+library(ggvenn)
 source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageThemesNSchemes.R")
 source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageDataCleanUtils.R")
 
@@ -36,7 +37,7 @@ rm(D_)
 s <- A %>% group_by(Subject, Day, Block, StabilityContext) %>% summarise(num=n())
 plot(s$num)
 s$weirdblocks <- ifelse((s$num<85|s$num>90), 1, 0)
-A <- SageExcludeHO(A, s, groupvars=c("Subject", "Day", "Block", "StabilityContext"), remove_data = FALSE, var_name = "fubar")
+A <-SageExcludeHO(A, s, groupvars=c("Subject", "Day", "Block", "StabilityContext"), remove_data = FALSE, var_name = "fubar")
 
 # Create useful variables ####
 # puzzle with the data to figure out what the optimal choice is
@@ -85,9 +86,17 @@ for (i in 1:nrow(blocks)){
   b$OptimalChoice <- ifelse(b$OptiResp > 20, 1, 0)
   b$Exception <- ifelse(b$RewardedOnThisTrial < 20, 1, 0)
   
+  ## To compute the lag, split according to stimpair, make the lab, then rearrange
+  b_oddsp <- filter(b, StimPair%%2==1)
+  b_evensp <- filter(b, StimPair%%2==0)
+  b_oddsp$ExceptionLag <- lag(b_oddsp$Exception)
+  b_evensp$ExceptionLag <- lag(b_evensp$Exception)
+  b <- rbind(b_oddsp, b_evensp)
+  b <- arrange(b, TrialNumber)
+  
   D <- rbind(D, b)
   print(sprintf("Block %d of %d", i, nrow(blocks)))
-  rm(a, b, FreqCorrect, FreqReward, names)
+  rm(a, b, FreqCorrect, FreqReward, names, b_oddsp, b_evensp)
 }
 rm(A)
 time <-toc()
@@ -174,16 +183,14 @@ SwitchHistoryLong <- pivot_longer(SwitchHistory, cols = ends_with("4x.png"), nam
 D <- inner_join(D, SwitchHistoryLong, by = c("Subject", "Day", "Block", "StabilityContext", "AnswerID"))
 rm(OptiResp, ORStable, ORVolatile, ORStableWide, ORVolatileWide, SwitchHistoryStable, SwitchHistoryVolatile)
 
-# Look at performance; who isn't learning?
+# Make DayBlock variable and make Subject a String
+D$BlockStr <- sprintf("%02d", D$Block)
+D<- D %>% unite(DayBlock, Day, BlockStr, sep=".", remove = FALSE)
+D$Subject <- sprintf("S%02d", as.numeric(D$Subject))
 
-# Quick and dirty using filters ####
-DF <- filter(D, fubar==0, Slackerblock==0)
-# General learning over time
-DF$BlockStr <- sprintf("%02d", DF$Block)
-DF<- DF %>% unite(DayBlock, Day, BlockStr, sep=".", remove = FALSE)
-DF$Subject <- as.factor(DF$Subject)
-AccDayBlock <- DF %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
-RTDayBlock <- filter(DF, OptimalChoice==1) %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "RT", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
+#DF <- filter(D, fubar==0, Slackerblock==0)
+AccDayBlock <- D %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
+RTDayBlock <- filter(D, OptimalChoice==1) %>% group_by(Subject, DayBlock, StabilityContext) %>% summarySE(measurevar = "RT", groupvars = c("Subject", "DayBlock", "StabilityContext"), na.rm=TRUE)
 
 AccuracyLines <- ggplot(AccDayBlock, aes(x=DayBlock, y=OptimalChoice, Group=Subject)) + #scale_y_continuous(limits = c(0.05, 0.2))+
   geom_line(aes(group=Subject, colour=Subject), size = 0.1, alpha=.5) +
@@ -202,13 +209,31 @@ RTLines <- ggplot(RTDayBlock, aes(x=DayBlock, y=RT, Group=Subject)) + #scale_y_c
 RTLines
 
 # Identify ppts who perform around chance level on day 3 ####
-AccGrp <- DF %>% group_by(Subject, Day, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "StabilityContext"), na.rm=TRUE)
-AccGrp$Subject <- as.numeric(AccGrp$Subject)
-QADay3 <- AccGrp %>% filter(Day==3) %>% select(-Day)
-hist(QADay3$OptimalChoice)
-QADay3$Under67 <- ifelse(QADay3$OptimalChoice<.67, 1, 0) 
-# Make a filter to exclude those guys
-D <- SageExcludeHO(D, QADay3, groupvars = c("Subject", "StabilityContext"), remove_data = FALSE, var_name = "BadPerformer")
+AccRaw <- D %>% filter(fubar==0, Slackerblock==0) %>% group_by(Subject, Day, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "StabilityContext"), na.rm=TRUE)
+AccRawBlock <- D %>% group_by(Subject, Day, Block, StabilityContext) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Block", "StabilityContext"), na.rm=TRUE)
+# histogram per Day (introduce a cutoff at .75)
+PerfHistDay <- ggplot(AccRaw, aes(x=OptimalChoice)) + 
+  geom_histogram(aes(fill=as.factor(Day)), binwidth = 0.02) +
+  geom_vline(xintercept = .75)+
+  facet_grid(.~Day) +
+  theme_sage_simple()
+PerfHistDay
+
+PerfHist <- ggplot(AccRawBlock, aes(x=OptimalChoice)) + 
+  geom_histogram(aes(fill=as.factor(Day)), binwidth = 0.05) +
+  geom_vline(xintercept = .66)+
+  facet_grid(.~Day) +
+  theme_sage_simple()
+PerfHist
+
+AccRaw <- AccRaw %>% mutate(DayUnder75 = ifelse(Day>1&OptimalChoice<.75, 1, 0))
+AccRawBlock <- AccRawBlock %>% mutate(BlockUnder66 = ifelse(Day>1&OptimalChoice<.66, 1, 0))
+D <- SageExcludeHO(D, AccRaw, groupvars = c("Subject", "Day", "StabilityContext"), remove_data = FALSE, var_name = "DayUnder75")
+D <- SageExcludeHO(D, AccRawBlock, groupvars = c("Subject", "Day", "Block", "StabilityContext"), remove_data = FALSE, var_name = "BlockUnder66")
+
+D$DayUnder75 <- as.logical(D$DayUnder75)
+D$BlockUnder66 <- as.logical(D$BlockUnder66)
+ggvenn(D, columns = c("DayUnder75", "BlockUnder66"),stroke_size = 0.5)
 
 # write a csv with the cleaned data
 setwd("C:/Users/elise.000/Documents/AAA_projects/Lisa_data/")
