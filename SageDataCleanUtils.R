@@ -68,7 +68,7 @@ SageExcludeHO <- function(data, crit_frame, groupvars, remove_data = TRUE, var_n
     disp(sprintf("Identified %d trials for exclusion, %0.2f percent of data.\n", sum(data$crit_col), (sum(data$crit_col)/nrow(data))*100))
     data <- data %>% filter(crit_col==0) %>% select(-crit_col)
   } else if (!remove_data){
-    disp(sprintf("Identified %d trials that match the exclusion criterion, %0.2f percent of data.\nYou opted NOT to delete these trials; instead the variable %s was created.\nFilter the data as needed using this variable.\n\n", sum(data$crit_col), nrow(data), var_name))
+    disp(sprintf("Identified %d trials that match the exclusion criterion, %0.2f percent of data.\nYou opted NOT to delete these trials; instead the variable %s was created.\nFilter the data as needed using this variable.\n\n", sum(data$crit_col), (sum(data$crit_col)/nrow(data))*100, var_name))
     colnames(data)[colnames(data) == "crit_col"] <- var_name
   }
   return(data)
