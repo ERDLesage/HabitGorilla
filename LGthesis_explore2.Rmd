@@ -1,0 +1,62 @@
+---
+title: "LGthesis_explore2"
+author: "ERDLesage"
+date: "21/02/2022"
+output: 
+  html_document: 
+    highlight: textmate
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Rmisc) # for summarySE
+library(tidyverse)
+library(gtsummary) # for nice tables
+library(afex) # for analyses
+library(phia) # for analyses - interactions
+library(broom.mixed)
+source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageThemesNSchemes.R")
+source("C:/Users/elise.000/OneDrive/Documents/r_scripts/gorilla_scripts/HabitGorilla/SageDataCleanUtils.R")
+
+D_ <- read.table("C:/Users/elise.000/Documents/AAA_projects/Lisa_data/LG_overtraining.txt", header = TRUE, sep = "\t")
+D <- D_ %>% filter(fubar==0, Slackerblock==0, BlockUnder66==0)
+BadPerformers <- D %>% group_by(Subject) %>% summarise(bp=mean(DayUnder75)) %>% mutate(BadPerf = ifelse(bp>0.33, 1, 0))
+D <- SageExcludeHO(D, BadPerformers, groupvars = c("Subject"))
+disp(sprintf("Total exclusions: %d / %d datapoints, %0.2f percent of data.\n", nrow(D_)-nrow(D), nrow(D), ((nrow(D_)-nrow(D))/nrow(D))*100))   
+rm(D_)
+
+```
+
+## Micro-outcome insensitivity
+How does treating the 
+- calculate the per-block difference between the "exception"
+- for the plotting of the average, means based on fewer than 3 observations are discarded
+- Result: does not look very systematic
+
+```{r micro io ACCURACY, echo=FALSE}
+AccIO <- D %>% group_by(Subject, Day, Block, StabilityContext, ExceptionLag) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Block", "StabilityContext", "ExceptionLag")) %>% filter(!is.na(ExceptionLag)) %>% select(-se, -N, -ci, -sd) %>% pivot_wider(names_from = "ExceptionLag", values_from="OptimalChoice") %>% mutate(AccDiff = `0`-`1`)
+AccIOGrp <- AccIO %>% group_by(Day, Block, StabilityContext) %>% summarySE(measurevar = "AccDiff", groupvars = c("Day", "Block","StabilityContext")) %>% filter(N>3)
+
+ggplot()+
+  geom_line(data=AccIO, aes(x=Block, y=AccDiff, group=Subject, color=StabilityContext), size =0.1, alpha=0.2) +
+  geom_line(data=AccIOGrp, aes(x=Block, y=AccDiff, color=StabilityContext), size=1)+
+  geom_errorbar(data=AccIOGrp, aes(x=Block, ymin=AccDiff-se, ymax=AccDiff+se, group=StabilityContext, color=StabilityContext))+
+  theme_sage_simple_nogrid()
+rm(AccIO, AccIOGrp)
+
+```
+
+```{r micro IO for RT, echo=FALSE}
+RTIO <- D %>% group_by(Subject, Day, Block, StabilityContext, ExceptionLag) %>% summarySE(measurevar = "RT", groupvars = c("Subject", "Day", "Block","StabilityContext", "ExceptionLag")) %>% filter(!is.na(ExceptionLag)) %>% select(-se, -N, -ci, -sd) %>% pivot_wider(names_from = "ExceptionLag", values_from="RT") %>% mutate(RTDiff = `1`-`0`)
+RTIOGrp <- RTIO %>% group_by(Day, Block, StabilityContext) %>% summarySE(measurevar = "RTDiff", groupvars = c("Day", "Block","StabilityContext"))%>% filter(N>3)
+
+ggplot()+
+  geom_line(data=RTIO, aes(x=Block, y=RTDiff, group=Subject, color=StabilityContext), size =0.1, alpha=0.2) +
+  geom_line(data=RTIOGrp, aes(x=Block, y=RTDiff, color=StabilityContext), size=1)+
+  geom_errorbar(data=RTIOGrp, aes(x=Block, ymin=RTDiff-se, ymax=RTDiff+se, group=StabilityContext, color=StabilityContext))+
+  theme_sage_simple_nogrid()
+
+rm(RTIO, RTIOGrp)
+
+```
