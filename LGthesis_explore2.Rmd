@@ -11,6 +11,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(Rmisc) # for summarySE
+library(pracma) # for disp
 library(tidyverse)
 library(gtsummary) # for nice tables
 library(afex) # for analyses
@@ -32,14 +33,14 @@ rm(D_)
 How does treating the 
 - calculate the per-block difference between the "exception"
 - for the plotting of the average, means based on fewer than 3 observations are discarded
-- Result: does not look very systematic
+- Result: does not look very systematic. Quite disappointing TBH
 
 ```{r micro io ACCURACY, echo=FALSE}
 AccIO <- D %>% group_by(Subject, Day, Block, StabilityContext, ExceptionLag) %>% summarySE(measurevar = "OptimalChoice", groupvars = c("Subject", "Day", "Block", "StabilityContext", "ExceptionLag")) %>% filter(!is.na(ExceptionLag)) %>% select(-se, -N, -ci, -sd) %>% pivot_wider(names_from = "ExceptionLag", values_from="OptimalChoice") %>% mutate(AccDiff = `0`-`1`)
 AccIOGrp <- AccIO %>% group_by(Day, Block, StabilityContext) %>% summarySE(measurevar = "AccDiff", groupvars = c("Day", "Block","StabilityContext")) %>% filter(N>3)
 
-ggplot()+
-  geom_line(data=AccIO, aes(x=Block, y=AccDiff, group=Subject, color=StabilityContext), size =0.1, alpha=0.2) +
+ggplot()+ ylim(-.1, .1)+
+  geom_line(data=AccIO, aes(x=Block, y=AccDiff, group=Subject, color=StabilityContext), size =0.1, alpha=0.3) +
   geom_line(data=AccIOGrp, aes(x=Block, y=AccDiff, color=StabilityContext), size=1)+
   geom_errorbar(data=AccIOGrp, aes(x=Block, ymin=AccDiff-se, ymax=AccDiff+se, group=StabilityContext, color=StabilityContext))+
   theme_sage_simple_nogrid()
@@ -51,7 +52,7 @@ rm(AccIO, AccIOGrp)
 RTIO <- D %>% group_by(Subject, Day, Block, StabilityContext, ExceptionLag) %>% summarySE(measurevar = "RT", groupvars = c("Subject", "Day", "Block","StabilityContext", "ExceptionLag")) %>% filter(!is.na(ExceptionLag)) %>% select(-se, -N, -ci, -sd) %>% pivot_wider(names_from = "ExceptionLag", values_from="RT") %>% mutate(RTDiff = `1`-`0`)
 RTIOGrp <- RTIO %>% group_by(Day, Block, StabilityContext) %>% summarySE(measurevar = "RTDiff", groupvars = c("Day", "Block","StabilityContext"))%>% filter(N>3)
 
-ggplot()+
+ggplot()+ylim(-100,100)+
   geom_line(data=RTIO, aes(x=Block, y=RTDiff, group=Subject, color=StabilityContext), size =0.1, alpha=0.2) +
   geom_line(data=RTIOGrp, aes(x=Block, y=RTDiff, color=StabilityContext), size=1)+
   geom_errorbar(data=RTIOGrp, aes(x=Block, ymin=RTDiff-se, ymax=RTDiff+se, group=StabilityContext, color=StabilityContext))+
