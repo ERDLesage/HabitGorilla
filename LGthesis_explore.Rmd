@@ -111,13 +111,15 @@ rm(RTGrp, RTInd, AccGrp, AccInd, AccSpaghetti, RTspaghetti)
 **Random factors** : Subject
 **Dependent variables** : RT and accuracy
 
-```{r mixed models, echo=FALSE}
-mAcc <- glmer(OptimalChoice~Day*StabilityContext+(1|Subject), data=D, family="binomial")
+```{r mixed model accuracy over time, echo=FALSE}
+mAcc <- glmer(OptimalChoice~Block*StabilityContext+(1|Subject), data=D, family="binomial")
 anova(mAcc)
 summary(mAcc)
 tbl_regression(mAcc, exponentiate=TRUE)
+```
 
-mRT <- lmer(RT~Day*StabilityContext+(1|Subject), data=D)
+```{r mixed model RT over time, echo is false}
+mRT <- lmer(RT~Day*Block+(1|Subject), data=D)
 anova(mRT)
 tbl_regression(mRT)
 
@@ -130,17 +132,18 @@ Correct choices are 80% reinforced. We might expect participants to "learn" from
 We center the blocks, because 1->16*3
 
 ### We wonder:
-1. is performance worse 1 trial after an exception?
-2. 
+1. is performance worse 1 trial after an exception? --YES
+2. does this change with experience? that is, do ppl start ignoring the exceptions as they learn that they should ignore the -- NO, not overall
 
 ```{r micro outcome insensitivity}
 # center block
 D$BlockCentered <- scale(D$Block, center=TRUE, scale=TRUE)
+D <- mutate(D, Blockbin=ifelse(Block<10, 1, 0))
 
 # on accuracy
-oiAccS <- glmer(OptimalChoice~ExceptionLag*BlockCentered+(1|Subject), data=filter(D, StabilityContext=="StabielC"), family=binomial)
-oiAccV <- glmer(OptimalChoice~ExceptionLag*BlockCentered+(1|Subject), data=filter(D, StabilityContext=="OnstabielC"), family=binomial)
 oiAcc <- glmer(OptimalChoice~ExceptionLag*StabilityContext*BlockCentered+(1|Subject), data=D, family=binomial)
+oiAccEarly <- glmer(OptimalChoice~ExceptionLag*StabilityContext*Blockbin+(1|Subject), data=D, family=binomial)
+
 oiAccSH <- glmer(OptimalChoice~ExceptionLag*SwitchHistory+(1|Subject), data=D, family=binomial)
 
 # on RT
@@ -152,6 +155,8 @@ anova(oiAcc)
 tbl_regression(oiAcc)
 anova(oiAccSH)
 tbl_regression(oiAccSH)
+anova(oiAccEarly)
+tbl_regression(oiAccEarly)
 
 anova(oiRT)
 tbl_regression(oiRT)
@@ -164,7 +169,10 @@ tbl_regression(oiRTBlockContext)
 
 ## Micro-habits? The effect of the switch history
 
-Rather 
+Rather than the binary dissociation of stable and volatile, we can look at the effects of switch history.
 
 
-## Now a little more difficult
+```{r switch history, echo=FALSE}
+accSH <- glmer(OptimalChoice~SwitchHistory*BlockCentered+(1|Subject), data=D, family="binomial")
+anova(accSH)
+```
