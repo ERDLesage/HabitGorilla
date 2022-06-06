@@ -1,7 +1,7 @@
-# Gorilla pointing data 1
-# The Sage 2022 (elise.r.d.lesage@gmail.com)
+# Gorilla Mouse Tracking Utils
+# 2022, by the Sage (elise.r.d.lesage@gmail.com)
 
-# utils to process mouse tracking data from Gorilla
+# utils to process mouse tracking data from Gorilla.sc
 
 # libraries
 library(mousetrap)
@@ -10,19 +10,15 @@ library(data.table)
 library(dplyr)
 library(ggplot2)
 
-## reading in all the behavioral data
-
-## checking the "did you get it" checks
-
-## reading in all the mouse traces #
-# code heavily based on https://support.gorilla.sc/support/walkthrough/rstudio#mousetrackingdatatoplotsinr
-readInMouseTrace <- function(MTpath){
+# 1.reading in all the mouse traces
+# code mostly from https://support.gorilla.sc/support/walkthrough/rstudio#mousetrackingdatatoplotsinr
+GorillaMouse.ReadInTraces <- function(MTpath){
   oldpath <- getwd()
   setwd(MTpath)
   print(sprintf("Reading in mouse traces from %s", MTpath))
   #Create a list of the xlsx files in your working directory.
   xlsxfiles<-list.files(pattern=".xlsx")
-  #fix the order
+  # fix the order
   Sorted <- GorillaMouse.FixOrder(xlsxfiles)
   #Import all the excel files in the list.
   print(sprintf("Starting to import %d traces.",length(xlsxfiles)))
@@ -35,9 +31,19 @@ readInMouseTrace <- function(MTpath){
   return(list(gorilla.traj, Sorted))
 }
 
+# 2. Putting trace file names in order of participant and trial (default = alphabetical) 
 # extract the trial number from the list of files, and order the list according to
 # ID and trial number
-GorillaMouse.FixOrder <- function(NameList){
+GorillaMouse.FixOrder <- function(NameList, explain=TRUE){
+  if (explain) {
+    cat("Ordering traces based on ID and Trial.\n
+    Deriving these from the trace file (.xlsx) name, so edit code if ID and Trial 
+    aren't 3rd and 8th item in the mouse trace file name.
+    Returns a three column dataframe with the names of the trace files are the first,
+    participant ID as the second, and Trial number as third column.
+    To use the sorted list, just convert the first row of the dataframe to a list, 
+    e.g. as.list(var_name$NameList)")
+  }
   a<- strsplit(NameList,"-")
   Order <- vector(mode="double", length = length(NameList))
   Order <- tibble(IDOrder = numeric(length(NameList)), TrialOrder = numeric(length(NameList)))
